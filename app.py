@@ -12,7 +12,7 @@ import plotly.graph_objects as go
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.preprocessing import PolynomialFeatures, StandardScaler
 from sklearn.linear_model import LinearRegression
-from sklearn.tree import DecisionTreeClassifier
+from sklearn.tree import DecisionTreeClassifier, plot_tree
 from sklearn.svm import SVC, SVR
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.ensemble import GradientBoostingClassifier, GradientBoostingRegressor
@@ -431,6 +431,29 @@ elif selected_experiment == experiments[2]:
                     ax.set_ylabel('Actual')
                     ax.set_title('Confusion Matrix (Test Set)')
                     st.pyplot(fig)
+                    
+                    # Decision Tree Visualization
+                    st.markdown("---")
+                    st.subheader("Decision Tree Visualization")
+                    
+                    # Adjust figure size based on tree depth
+                    fig_width = max(12, len(feature_cols) * 4)
+                    fig_height = max(8, max_depth * 2)
+                    
+                    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+                    plot_tree(
+                        model,
+                        feature_names=feature_cols,
+                        class_names=class_names if class_names is not None else None,
+                        filled=True,
+                        rounded=True,
+                        ax=ax,
+                        fontsize=10
+                    )
+                    ax.set_title('Decision Tree Structure', fontsize=16, fontweight='bold')
+                    st.pyplot(fig)
+                    
+                    st.info("💡 The tree shows decision rules at each node. Darker colors indicate higher class purity.")
 
 # ============================================================================
 # EXPERIMENT 4: SUPPORT VECTOR MACHINE
@@ -542,6 +565,118 @@ elif selected_experiment == experiments[3]:
                         ax.set_ylabel('Actual')
                         ax.set_title('Confusion Matrix (Test Set)')
                         st.pyplot(fig)
+                        
+                        # SVM Decision Boundary Visualization (for 2 features)
+                        st.markdown("---")
+                        st.subheader("SVM Decision Boundary Visualization")
+                        
+                        if len(feature_cols) == 2:
+                            # Create mesh for decision boundary
+                            h = 0.02  # step size in the mesh
+                            x_min, x_max = X_train_scaled[:, 0].min() - 1, X_train_scaled[:, 0].max() + 1
+                            y_min, y_max = X_train_scaled[:, 1].min() - 1, X_train_scaled[:, 1].max() + 1
+                            xx, yy = np.meshgrid(np.arange(x_min, x_max, h),
+                                               np.arange(y_min, y_max, h))
+                            
+                            # Predict on mesh
+                            Z = model.predict(np.c_[xx.ravel(), yy.ravel()])
+                            Z = Z.reshape(xx.shape)
+                            
+                            # Plot
+                            fig, ax = plt.subplots(figsize=(12, 8))
+                            
+                            # Plot decision boundary
+                            contour = ax.contourf(xx, yy, Z, alpha=0.3, cmap='RdYlBu')
+                            
+                            # Plot training points
+                            scatter = ax.scatter(X_train_scaled[:, 0], X_train_scaled[:, 1], 
+                                               c=y_train, cmap='RdYlBu', 
+                                               edgecolors='black', s=50, alpha=0.7,
+                                               label='Training Data')
+                            
+                            # Plot test points
+                            ax.scatter(X_test_scaled[:, 0], X_test_scaled[:, 1], 
+                                     c=y_test, cmap='RdYlBu', 
+                                     edgecolors='yellow', s=100, alpha=0.9,
+                                     marker='s', linewidths=2,
+                                     label='Test Data')
+                            
+                            # Plot support vectors
+                            if hasattr(model, 'support_vectors_'):
+                                ax.scatter(model.support_vectors_[:, 0], 
+                                         model.support_vectors_[:, 1],
+                                         s=200, linewidths=2, facecolors='none', 
+                                         edgecolors='green', label='Support Vectors')
+                                
+                                st.info(f"**Number of Support Vectors:** {len(model.support_vectors_)}")
+                            
+                            ax.set_xlabel(f'{feature_cols[0]} (scaled)', fontsize=12)
+                            ax.set_ylabel(f'{feature_cols[1]} (scaled)', fontsize=12)
+                            ax.set_title(f'SVM Decision Boundary ({kernel} kernel, C={c_value})', 
+                                       fontsize=14, fontweight='bold')
+                            ax.legend(loc='best')
+                            plt.colorbar(scatter, ax=ax, label='Class')
+                            st.pyplot(fig)
+                            
+                            st.success("✅ Decision boundary shows how the SVM separates different classes in feature space.")
+                            
+                        elif len(feature_cols) > 2:
+                            # Use PCA to reduce to 2D for visualization
+                            st.info("Using PCA to reduce to 2D for visualization...")
+                            
+                            pca = PCA(n_components=2)
+                            X_train_pca = pca.fit_transform(X_train_scaled)
+                            X_test_pca = pca.transform(X_test_scaled)
+                            
+                            # Train a new SVM on PCA features for visualization
+                            svm_viz = SVC(kernel=kernel, C=c_value, random_state=random_state)
+                            svm_viz.fit(X_train_pca, y_train)
+                            
+                            # Create mesh
+                            h = 0.02
+                            x_min, x_max = X_train_pca[:, 0].min() - 1, X_train_pca[:, 0].max() + 1
+                            y_min, y_max = X_train_pca[:, 1].min() - 1, X_train_pca[:, 1].max() + 1
+                            xx, yy = np.meshgrid(np.arange(x_min, x_max, h),
+                                               np.arange(y_min, y_max, h))
+                            
+                            Z = svm_viz.predict(np.c_[xx.ravel(), yy.ravel()])
+                            Z = Z.reshape(xx.shape)
+                            
+                            # Plot
+                            fig, ax = plt.subplots(figsize=(12, 8))
+                            
+                            contour = ax.contourf(xx, yy, Z, alpha=0.3, cmap='RdYlBu')
+                            
+                            scatter = ax.scatter(X_train_pca[:, 0], X_train_pca[:, 1], 
+                                               c=y_train, cmap='RdYlBu', 
+                                               edgecolors='black', s=50, alpha=0.7,
+                                               label='Training Data')
+                            
+                            ax.scatter(X_test_pca[:, 0], X_test_pca[:, 1], 
+                                     c=y_test, cmap='RdYlBu', 
+                                     edgecolors='yellow', s=100, alpha=0.9,
+                                     marker='s', linewidths=2,
+                                     label='Test Data')
+                            
+                            if hasattr(svm_viz, 'support_vectors_'):
+                                ax.scatter(svm_viz.support_vectors_[:, 0], 
+                                         svm_viz.support_vectors_[:, 1],
+                                         s=200, linewidths=2, facecolors='none', 
+                                         edgecolors='green', label='Support Vectors')
+                                
+                                st.info(f"**Number of Support Vectors (PCA space):** {len(svm_viz.support_vectors_)}")
+                            
+                            ax.set_xlabel(f'PC1 ({pca.explained_variance_ratio_[0]:.1%} variance)', fontsize=12)
+                            ax.set_ylabel(f'PC2 ({pca.explained_variance_ratio_[1]:.1%} variance)', fontsize=12)
+                            ax.set_title(f'SVM Decision Boundary in PCA Space ({kernel} kernel, C={c_value})', 
+                                       fontsize=14, fontweight='bold')
+                            ax.legend(loc='best')
+                            plt.colorbar(scatter, ax=ax, label='Class')
+                            st.pyplot(fig)
+                            
+                            st.success("✅ Features reduced to 2D using PCA for visualization. Decision boundary shows class separation.")
+                        else:
+                            st.warning("Need at least 2 features for decision boundary visualization.")
                         
                     else:
                         with col1:
